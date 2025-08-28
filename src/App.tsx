@@ -305,7 +305,7 @@ export const App: React.FC = () => {
 
                 setIsLoading(true);
 
-                Promise.allSettled(completedTodos.map(t => deleteTodo(t.id)))
+                Promise.all(completedTodos.map(t => deleteTodo(t.id)))
                   .then(deletedIds => {
                     setTodos(prevTodos =>
                       prevTodos.filter(t => !deletedIds.includes(t.id)),
