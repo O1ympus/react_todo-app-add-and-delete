@@ -9,52 +9,18 @@ import {
   postTodo,
   USER_ID,
 } from './api/todos';
-import { Todo } from './types/Todo';
 import cn from 'classnames';
-import { TodoWithLoading } from './types/TodoWithLoading';
+import { Todo, TodoWithLoading } from './types/types';
 
 function areAllTodosCompleted(todos: Todo[]) {
   return todos.every(todo => todo.completed);
 }
 
-export const App: React.FC = () => {
-  const [todos, setTodos] = useState<TodoWithLoading[]>([]);
-  const [isError, setIsError] = useState(false);
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
-  const [flag, setFlag] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setIsLoading(true);
-    getTodos()
-      .then(setTodos)
-      .catch(() => {
-        setIsError(true);
-        setErrorMessage('Unable to load todos');
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (isError) {
-      setTimeout(() => {
-        setIsError(false);
-        setErrorMessage('');
-      }, 3000);
-    }
-  }, [isError]);
-
-  useEffect(() => {
-    if (!isLoading && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isLoading]);
-
-  const filteredTodos = todos.filter(todo => {
+function filterTodos(
+  todos: TodoWithLoading[],
+  filter: 'all' | 'active' | 'completed',
+) {
+  return todos.filter(todo => {
     if (filter === 'active') {
       return !todo.completed;
     }
@@ -65,6 +31,43 @@ export const App: React.FC = () => {
 
     return true;
   });
+}
+
+export const App: React.FC = () => {
+  const [todos, setTodos] = useState<TodoWithLoading[]>([]);
+  const [newTodoTitle, setNewTodoTitle] = useState('');
+  const [filter, setFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [allCompleted, setAllCompleted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [hasLoading, setHasLoading] = useState(false);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setHasLoading(true);
+    getTodos()
+      .then(setTodos)
+      .catch(() => {
+        setErrorMessage('Unable to load todos');
+      })
+      .finally(() => setHasLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (errorMessage) {
+      setTimeout(() => {
+        setErrorMessage('');
+      }, 3000);
+    }
+  }, [errorMessage]);
+
+  useEffect(() => {
+    if (!hasLoading && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [hasLoading]);
+
+  const filteredTodos = filterTodos(todos, filter);
 
   return !USER_ID ? (
     <UserWarning />
@@ -85,10 +88,10 @@ export const App: React.FC = () => {
                 setTodos(prevTodos => {
                   return prevTodos.map(todo => ({
                     ...todo,
-                    completed: !flag,
+                    completed: !allCompleted,
                   }));
                 });
-                setFlag(prevState => !prevState);
+                setAllCompleted(prevState => !prevState);
               }}
             />
           )}
@@ -96,13 +99,12 @@ export const App: React.FC = () => {
             onSubmit={event => {
               event.preventDefault();
 
-              const title = query.trim();
+              const title = newTodoTitle.trim();
 
               if (!title) {
-                setIsError(true);
                 setErrorMessage('Title should not be empty');
               } else {
-                setIsLoading(true);
+                setHasLoading(true);
 
                 const tempId = Date.now();
                 const tempTodo: TodoWithLoading = {
@@ -122,14 +124,13 @@ export const App: React.FC = () => {
                         .filter(t => t.id !== tempTodo.id)
                         .concat({ ...newTodo, loading: false }),
                     );
-                    setQuery('');
+                    setNewTodoTitle('');
                   })
                   .catch(() => {
-                    setIsError(true);
                     setErrorMessage('Unable to add a todo');
                     setTodos(prev => prev.filter(t => t.id !== tempTodo.id));
                   })
-                  .finally(() => setIsLoading(false));
+                  .finally(() => setHasLoading(false));
               }
             }}
           >
@@ -139,10 +140,10 @@ export const App: React.FC = () => {
               type="text"
               className="todoapp__new-todo"
               placeholder="What needs to be done?"
-              value={query}
-              onChange={event => setQuery(event.target.value)}
+              value={newTodoTitle}
+              onChange={event => setNewTodoTitle(event.target.value)}
               autoFocus
-              disabled={isLoading}
+              disabled={hasLoading}
             />
           </form>
         </header>
@@ -152,14 +153,6 @@ export const App: React.FC = () => {
             <div
               data-cy="Todo"
               className={cn('todo', { completed: todo.completed })}
-              style={{
-                display:
-                  (todo.completed && filter === 'completed') ||
-                  (!todo.completed && filter === 'active') ||
-                  filter === 'all'
-                    ? 'block'
-                    : 'none',
-              }}
               key={todo.id}
             >
               <label className="todo__status-label">
@@ -171,7 +164,7 @@ export const App: React.FC = () => {
                   onChange={() => {
                     const newCompleted = !todo.completed;
 
-                    setIsLoading(true);
+                    setHasLoading(true);
 
                     patchTodo(todo.id, { completed: newCompleted })
                       .then(() => {
@@ -184,10 +177,9 @@ export const App: React.FC = () => {
                         );
                       })
                       .catch(() => {
-                        setIsError(true);
                         setErrorMessage('Unable to update a todo');
                       })
-                      .finally(() => setIsLoading(false));
+                      .finally(() => setHasLoading(false));
                   }}
                 />
               </label>
@@ -220,7 +212,6 @@ export const App: React.FC = () => {
                       inputRef.current?.focus();
                     })
                     .catch(() => {
-                      setIsError(true);
                       setErrorMessage('Unable to delete a todo');
                       // Reset loading if error occurs
                       setTodos(prevTodos =>
@@ -303,7 +294,7 @@ export const App: React.FC = () => {
 
                 event.preventDefault();
 
-                setIsLoading(true);
+                setHasLoading(true);
 
                 Promise.allSettled(completedTodos.map(t => deleteTodo(t.id)))
                   .then(results => {
@@ -315,7 +306,6 @@ export const App: React.FC = () => {
                       .map(res => res.value);
 
                     if (results.some(res => res.status === 'rejected')) {
-                      setIsError(true);
                       setErrorMessage('Unable to delete a todo');
                     }
 
@@ -323,7 +313,7 @@ export const App: React.FC = () => {
                       prevTodos.filter(t => !successfulIds.includes(t.id)),
                     );
                   })
-                  .finally(() => setIsLoading(false));
+                  .finally(() => setHasLoading(false));
               }}
             >
               Clear completed
@@ -338,7 +328,7 @@ export const App: React.FC = () => {
         data-cy="ErrorNotification"
         className={cn(
           'notification is-danger is-light has-text-weight-normal',
-          { hidden: !isError },
+          { hidden: !errorMessage },
         )}
       >
         <button data-cy="HideErrorButton" type="button" className="delete" />
